@@ -80,7 +80,7 @@ void print_help()
            "\n"
            "Options:\n"
            "  --device,-d                    I2C device path (defaults to: \"/dev/i2c\").\n"
-           "                                 This the default option, and may also be given"
+           "                                 This the default option, and may also be given\n"
            "                                 directly without any option flag.\n"
            "\n"
            "  --slave-address,--address,-a   I2C slave address.\n"
