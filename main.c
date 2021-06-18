@@ -88,7 +88,7 @@ void print_help()
            "  @<address>                     I2C slave address, as given in <address>.\n"
            "\n"
            "  --format,-f                    Print get-result with given printf-format.\n"
-           "                                 Defaults to \"0x\%x\\n\".\n"
+           "                                 Defaults to \"0x\%02x\\n\".\n"
            "\n"
            "  --verbose,-v                   Print info messages to stderr.\n"
            "\n"
@@ -142,9 +142,9 @@ int main(int argc, char * argv[])
     int verbose = 0;
     const char * i2c_device = "/dev/i2c";
     unsigned char i2c_slave_address = 0;
-    const char * result_format = "0x%x\n";
+    const char * result_format = "0x%02x\n";
     
-    for(int i=0;i<argc;++i)
+    for(int i=1;i<argc;++i)
     {
         char * arg = argv[i];
         
@@ -239,7 +239,7 @@ int main(int argc, char * argv[])
     if(verbose == 1) printf("info: I2C device opened.\n");
     
     // execute commands
-    for(int i=0;i<argc;++i)
+    for(int i=1;i<argc;++i)
     {
         char * arg = argv[i];
         
