@@ -347,7 +347,7 @@ int main(int argc, char * argv[])
             
             i2c_slave_address = parse_byte(arg_value);
         }
-        else if(strcmp(arg, "get") == 0 || strcmp(arg, "set") == 0)
+        else if(strcmp(arg, "get") == 0 || strcmp(arg, "set") == 0 || strcmp(arg, "read") == 0 || strcmp(arg, "write") == 0)
         {
             // commands are handled later on, after a command is given, no options may be provided anymore
             break;
@@ -463,14 +463,6 @@ int main(int argc, char * argv[])
             
             char * arg_value = argv[++i];
             
-            // replace trailing '\0' with ' ' if there is another argument
-            // so as to concatenate following arguments with a whitespace
-            while(i + 1 < argc)
-            {
-                char * tmp = argv[i++];
-                tmp[strlen(tmp)] = ' ';
-            }
-            
             // arg_value is an ascii encoded string
             // but we may interpret \0, \x00, \u0000
             
@@ -497,7 +489,7 @@ int main(int argc, char * argv[])
         }
         else if(strcmp(arg, "read") == 0)
         {
-            size_t buflen = 1;
+            ssize_t buflen = 1;
             if(i + 1 < argc)
             {
                 // parse optional custom buffer size, and put in buflen (defaults to reading 1 byte)
