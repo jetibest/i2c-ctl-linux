@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 
 // for i2c in linux, refer to: https://www.kernel.org/doc/html/latest/i2c/index.html
@@ -16,6 +17,141 @@
 
 #define I2C_SLAVE 1795
 
+
+size_t parse_escape_sequences(char * dst, char * src)
+{
+    char * i = src;
+    char * j = dst;
+    
+    while(*i != '\0')
+    {
+        if(*i == '\\')
+        {
+            ++i;
+            
+            if(*i == '\\')
+            {
+                *j = '\\';
+                ++j;
+            }
+            else if(*i == 'U')
+            {
+                // hexadecimal representation (8 bytes)
+                
+                ++i;
+                
+                char buf[9];
+                
+                buf[0] = *(i++);
+                buf[1] = *(i++);
+                buf[2] = *(i++);
+                buf[3] = *(i++);
+                buf[4] = *(i++);
+                buf[5] = *(i++);
+                buf[6] = *(i++);
+                buf[7] = *(i++);
+                buf[8] = '\0';
+                
+                uint32_t value = strtoul(buf, NULL, 16);
+                *j = value;
+                ++j;
+                value >>= 8;
+                if(value != 0)
+                {
+                    *j = value;
+                    ++j;
+                }
+                value >>= 8;
+                if(value != 0)
+                {
+                    *j = value;
+                    ++j;
+                }
+                value >>= 8;
+                if(value != 0)
+                {
+                    *j = value;
+                    ++j;
+                }
+            }
+            else if(*i == 'u')
+            {
+                // hexadecimal representation (4 bytes)
+                
+                ++i;
+                
+                char buf[5];
+                
+                buf[0] = *(i++);
+                buf[1] = *(i++);
+                buf[2] = *(i++);
+                buf[3] = *(i++);
+                buf[4] = '\0';
+                
+                uint16_t value = strtoul(buf, NULL, 16);
+                *j = value;
+                ++j;
+                value >>= 8;
+                if(value != 0)
+                {
+                    *j = value;
+                    ++j;
+                }
+            }
+            else if(*i == 'x')
+            {
+                // hexadecimal representation (2 bytes)
+                
+                ++i;
+                
+                char buf[3];
+                
+                buf[0] = *(i++);
+                buf[1] = *(i++);
+                buf[2] = '\0';
+                
+                *j = strtoul(buf, NULL, 16);
+                ++j;
+            }
+            else if(*i >= '0' && *i <= '9')
+            {
+                // octal representation (3 bytes)
+                
+                char * end;
+                *j = strtoul(i, &end, 8);
+                ++j;
+                
+                i = end;
+            }
+            else if(*i == '\'') { *j = '\''; ++j; ++i; }
+            else if(*i == '"') { *j = '\"'; ++j; ++i; }
+            else if(*i == '?') { *j = '\?'; ++j; ++i; }
+            else if(*i == '\\') { *j = '\\'; ++j; ++i; }
+            else if(*i == 'a') { *j = '\a'; ++j; ++i; }
+            else if(*i == 'b') { *j = '\b'; ++j; ++i; }
+            else if(*i == 'f') { *j = '\f'; ++j; ++i; }
+            else if(*i == 'n') { *j = '\n'; ++j; ++i; }
+            else if(*i == 'r') { *j = '\r'; ++j; ++i; }
+            else if(*i == 't') { *j = '\t'; ++j; ++i; }
+            else if(*i == 'v') { *j = '\v'; ++j; ++i; }
+            else
+            {
+                ++i;
+            }
+        }
+        else
+        {
+            // copy char
+            *j = *i;
+            ++j;
+            ++i;
+        }
+    }
+    
+    *j = *i;
+    
+    return j - dst;
+}
 
 int i2c_master_open(const char * i2c_device, unsigned char i2c_slave_address)
 {
@@ -99,6 +235,10 @@ void print_help()
            "  get [register]\n"
            "  \n"
            "  set [register] [value]\n"
+           "\n"
+           "  write [binary data, with escape sequences]\n"
+           "\n"
+           "  read [number of bytes]\n"
            "\n"
            "\n"
            "Examples:\n"
@@ -308,6 +448,82 @@ int main(int argc, char * argv[])
             }
             
             if(verbose == 1) printf("info: I2C set success (%d).\n", res);
+        }
+        else if(strcmp(arg, "write") == 0)
+        {
+            if(i + 1 >= argc)
+            {
+                printf("error: Invalid usage. Expected one value for argument (%s).\n", arg);
+                if(i2c_master_close(fd) != -1)
+                {
+                    if(verbose == 1) printf("info: I2C device closed.\n");
+                }
+                return 1;
+            }
+            
+            char * arg_value = argv[++i];
+            
+            // replace trailing '\0' with ' ' if there is another argument
+            // so as to concatenate following arguments with a whitespace
+            while(i + 1 < argc)
+            {
+                char * tmp = argv[i++];
+                tmp[strlen(tmp)] = ' ';
+            }
+            
+            // arg_value is an ascii encoded string
+            // but we may interpret \0, \x00, \u0000
+            
+            char binary_value[strlen(arg_value)];
+            size_t len = parse_escape_sequences(binary_value, arg_value);
+            
+            // now write binary_value
+            
+            if(verbose == 1) printf("info: I2C write: %s\n", arg_value);
+            
+            ssize_t res = i2c_master_write(fd, binary_value, len);
+            
+            if(res == -1)
+            {
+                printf("error: Could not write data (%d bytes) for slave address (0x%x) using I2C device (%s).\n", len, i2c_slave_address, i2c_device);
+                if(i2c_master_close(fd) != -1)
+                {
+                    if(verbose == 1) printf("info: I2C device closed.\n");
+                }
+                return 1;
+            }
+            
+            if(verbose == 1) printf("info: I2C write success (%d).\n", res);
+        }
+        else if(strcmp(arg, "read") == 0)
+        {
+            size_t buflen = 1;
+            if(i + 1 < argc)
+            {
+                // parse optional custom buffer size, and put in buflen (defaults to reading 1 byte)
+                buflen = strtoul(argv[++i], NULL, 0);
+            }
+            
+            char binary_data[buflen + 1];
+            ssize_t res = i2c_master_read(fd, binary_data, buflen);
+            
+            if(res < buflen)
+            {
+                printf("error (%d): Could not read data (%d bytes) for slave address (0x%x) using I2C device (%s).\n", res, buflen, i2c_slave_address, i2c_device);
+                if(i2c_master_close(fd) != -1)
+                {
+                    if(verbose == 1) printf("info: I2C device closed.\n");
+                }
+                return 1;
+            }
+            
+            if(verbose == 1) printf("info: I2C read success (%d).\n", res);
+            
+            // ensure null-byte terminated string
+            binary_data[buflen] = '\0';
+            
+            // print raw binary data
+            printf("%s\n", binary_data);
         }
     }
     
