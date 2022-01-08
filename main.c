@@ -283,6 +283,7 @@ int main(int argc, char * argv[])
     const char * i2c_device = "/dev/i2c";
     unsigned char i2c_slave_address = 0;
     const char * result_format = "0x%02x\n";
+    int format_override = 0;
     
     for(int i=1;i<argc;++i)
     {
@@ -308,6 +309,7 @@ int main(int argc, char * argv[])
         {
             if(i + 1 < argc)
             {
+                format_override = 1;
                 result_format = argv[++i];
             }
             else
@@ -382,6 +384,8 @@ int main(int argc, char * argv[])
     for(int i=1;i<argc;++i)
     {
         char * arg = argv[i];
+
+        if(verbose == 1) printf("info: handling argument %s\n", arg);
         
         if(strcmp(arg, "get") == 0)
         {
@@ -467,11 +471,16 @@ int main(int argc, char * argv[])
             // but we may interpret \0, \x00, \u0000
             
             char binary_value[strlen(arg_value)];
-            size_t len = parse_escape_sequences(binary_value, arg_value);
+            size_t len = 0;
+            
+            if(arg_value[0] != '\0')
+            {
+                len = parse_escape_sequences(binary_value, arg_value);
+            }
             
             // now write binary_value
             
-            if(verbose == 1) printf("info: I2C write: %s\n", arg_value);
+            if(verbose == 1) printf("info: I2C write (%d): %s\n", len, arg_value);
             
             ssize_t res = i2c_master_write(fd, binary_value, len);
             
@@ -514,8 +523,19 @@ int main(int argc, char * argv[])
             // ensure null-byte terminated string
             binary_data[buflen] = '\0';
             
-            // print raw binary data
-            printf("%s\n", binary_data);
+            if(format_override == 1)
+            {
+                // print byte by byte with the given format
+                for(size_t j=0;j<buflen;++j)
+                {
+                    printf(result_format, binary_data[j]);
+                }
+            }
+            else
+            {
+                // print raw binary data
+                printf("%s\n", binary_data);
+            }
         }
     }
     
